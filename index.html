@@ -1,0 +1,1146 @@
+<!DOCTYPE html>
+{% autoescape true %}
+<html>
+  <head>
+    <title>LocChat</title>
+    <meta name="mobile-web-app-capable" content="yes">
+    <link rel="manifest" href="manifest.json">
+    <link href='//fonts.googleapis.com/css?family=Abel' rel='stylesheet' type='text/css'>
+    <meta name="description" content="Location based Chat without creating any account.">
+    <meta name="keywords" content="Location,Chat,Anonymous,匿名,チャット,近く,GPS,Near,Friend,Local,Encounter,Free,Message,Realtime">
+    <meta name="viewport" content="initial-scale=1.0, user-scalable=no">
+    <meta charset="utf-8">
+    <style>
+      html, body {
+        height: 100%;
+        margin: 0px;
+        padding: 0px
+      }
+      img.clickable {
+        cursor: pointer;
+      }
+      #header {
+        position: fixed;
+        background-color: #eee;
+        z-index: 10;
+        top: 0;
+        width: 100%;
+        height: 46px;
+        margin: 0px;
+        padding: 0px;
+        text-align: center;
+      }
+      #content-main {
+        position: fixed;
+        z-index: 10;
+        top: 45px;
+        width: 100%;
+        height: 160px;
+        margin: 0px;
+        padding: 0px;
+      }
+      #title {
+        font-family: 'Abel', sans-serif;
+        margin-left:auto;
+        margin-right:auto;
+        font-size: 30px;
+        height: 38px;
+        margin-top: 8px;
+      }
+      #settings-btn {
+        outline: none;
+        position: absolute;
+        top: 12px;
+        width: 28px;
+        height: 28px;
+        left: 10px;
+        padding: 0;
+        border: 0;
+        margin: 0;
+        background: url(img/ic_settings_24px.svg) left top no-repeat;
+        background-size: 100%;
+      }
+      #settings-btn:active {
+        opacity: 0.7;
+      }
+      #push-frame {
+        background-color: #eee;
+        position: absolute;
+        top: 12px;
+        width: 28px;
+        height: 28px;
+        left: 50px;
+        padding: 0;
+        border: 0;
+        margin: 0;
+      }
+      #location-btn {
+        outline: none;
+        position: absolute;
+        top: 12px;
+        width: 28px;
+        height: 28px;
+        left: calc(100% - 80px);
+        padding: 0;
+        border: 0;
+        margin: 0;
+        background: url(img/ic_my_location_24px.svg) left top no-repeat;
+        background-size: 100%;
+      }
+      #location-btn:active {
+        opacity: 0.7;
+      }
+      #location-btn.searching {
+        background: url(img/ic_location_searching_24px.svg) left top no-repeat;
+        background-size: 100%;
+      }
+      #send-btn {
+        outline: none;
+        position: absolute;
+        top: 12px;
+        width: 28px;
+        height: 28px;
+        left: calc(100% - 38px);
+        padding: 0;
+        border: 0;
+        margin: 0;
+        background: url(img/ic_send_24px.svg) left top no-repeat;
+        background-size: 100%;
+      }
+      #send-btn:active {
+        opacity: 0.7;
+      }
+      #send-btn:disabled {
+        opacity: 0.1;
+      }
+      #camera-pic {
+        position: absolute;
+        top: 30px;
+        width: 32px;
+        height: 32px;
+        right: 37px;
+        padding: 0;
+        margin: 0;
+        background-color: white;
+        border: 0;
+      }
+      .camera-pic-hidden {
+        display: none;
+      }
+      #camera-btn {
+        outline: none;
+        position: absolute;
+        top: 32px;
+        width: 28px;
+        height: 28px;
+        right: 4px;
+        padding: 0;
+        border: 0;
+        margin: 0;
+        background: url(img/ic_photo_camera_black_24px.svg) left top no-repeat;
+        background-size: 100%;
+      }
+      #camera-btn:active {
+        opacity: 0.7;
+      }
+      #camera-input {
+        outline: none;
+        position: absolute;
+        top: 32px;
+        width: 0px;
+        height: 0px;
+      }
+      #input-form {
+        position: absolute;
+        top: 1px;
+        width: calc(100% - 2px);
+        height: 60px;
+        margin: 0px;
+        padding: 0px;
+        background-color: #fff;
+        border: 1px solid black;
+      }
+      #input-content {
+        position: absolute;
+        font-size: 19px;
+        resize: none;
+        top: 5px;
+        left: 5px;
+        width: calc(100% - 20px);
+        height: calc(100% - 20px);
+        outline: none;
+        padding: 2px;
+        border: 1px solid #FFF;
+        margin: 0;
+        -webkit-appearance: none;
+      }
+      #map-container {
+        position: absolute;
+        top: 62px;
+        width: 100%;
+        height: 100px;
+        margin: 0px;
+        padding: 0px;
+      }
+      #map-overcanvas {
+        pointer-events: none;
+        position: absolute;
+        z-index: 5;
+        width: 100%;
+        height: 100%;
+        margin: 0px;
+        padding: 0px;
+      }
+      #map-canvas {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        margin: 0px;
+        padding: 0px
+      }
+      #message-div {
+        position: absolute;
+        top: 208px;
+        width: 100%;
+        margin: 0px;
+        padding: 0px;
+        word-break: break-all;;
+      }
+      .chat {
+        position: relative;
+        background: #fff;
+        border: 1px solid #777;
+        margin: 2px;
+        padding: 2px 2px 3px 3px;
+        border-radius: 7px;
+        clear: both;
+        width: calc(100% - 11px);
+        float: left;
+      }
+      .chat-selected {
+        border: 3px solid #777;
+        margin: 1px;
+        padding: 1px 1px 2px 2px;
+      }
+      .chat-content {
+        display: inline;
+        font-size: 16px;
+        line-height: 110%;
+      }
+      .chat-info {
+        display: inline;
+        border: 0;
+        margin: 0;
+        padding: 0;
+      }
+      .chat-user-name {
+        display: inline;
+        font-weight: bolder;
+        font-size: 10px;
+        color: #000;
+        margin-left: 5px;
+      }
+      .chat-date {
+        display: inline;
+        font-size: 10px;
+        color: #555;
+        margin-left: 5px;
+        margin-right: 5px;
+      }
+      .chat-image-div {
+        width: 100%;
+        text-align: center;
+      }
+
+    </style>
+    <script src='/_ah/channel/jsapi'></script>
+    <script src="//maps.googleapis.com/maps/api/js?v=3"></script>
+    <script>
+debug = console.log.bind(console);
+
+var PageSessionController = function() {
+  this.pid = Math.floor((1 + Math.random()) * 0x10000).toString(16).substring(1);
+  this.retryCount = 0;
+  this.waitingForRetry = false;
+  this.connected = false;
+  this.needToRenewChannel = false;
+  this.sessionExpired = false;
+  this.isSendPosScheduled = false;
+  this.currentPosInfo = "";
+  this.lastSendPosInfo = "";
+  this.onchat = null;
+  this.onchatlist = null;
+};
+PageSessionController.prototype = {
+  initialize: function(mapController) {
+    this._sw_register_promise = this._registerSW();
+    this._mapController = mapController;
+    this._mapController.registerBoundsChangedCallback(
+      this._onMapBoundsChanged.bind(this))
+    document.addEventListener('visibilitychange', this._onVisibilityChange.bind(this), false);
+    window.addEventListener('beforeunload', this._onUnload.bind(this), false);
+  },
+  _onVisibilityChange: function() {
+    debug('_onVisibilityChange pid:' + this.pid);
+    debug('document.hidden: ' + document.hidden);
+    debug('document.visibilityState: ' + document.visibilityState);
+    if (this.sessionExpired)
+      return;
+    var xhr = new XMLHttpRequest();
+    if (!document.hidden)
+      xhr.open('POST', '/f?visible');
+    else
+      xhr.open('POST', '/f?hidden');
+    var data = new FormData();
+    data.append('pid', this.pid);
+    if (!document.hidden)
+      data.append('v', true);
+    xhr.send(data);
+  },
+  _onUnload: function() {
+    if (this.sessionExpired || document.hidden)
+      return;
+    var data = new FormData();
+    data.append('pid', this.pid);
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', '/f?unload' , false);
+    xhr.send(data);
+  },
+  _registerSW: function() {
+    if (!navigator.serviceWorker)
+      return null;
+    return navigator.serviceWorker.getRegistration("/push/")
+      .then(function(reg) {
+          if (reg &&
+              reg.scope == location.protocol + '//' + location.hostname +
+                           (location.port ? ':'+location.port : '') + '/push/') {
+            return reg.pushManager.getSubscription()
+              .then(function(pushSubscription) {
+                  if (pushSubscription)
+                    return pushSubscription.unsubscribe();
+                })
+              .then(function() {
+                  return reg.unregister();
+                });
+         }
+        })
+      .then(function() {
+          return navigator.serviceWorker.register('./sw.js', {scope: './'})
+            .then(function(reg) {
+              if (reg.installing) {
+                var worker = reg.installing;
+                return new Promise(function(resolve) {
+                    worker.addEventListener('statechange', function() {
+                        if (worker.state === 'activated')
+                          resolve();
+                      });
+                  });
+              }
+            })
+        });
+  },
+  sendHandShake: function() {
+    debug('_sendHandShake pid:' + this.pid);
+    this.waitingForRetry = false;
+    var xhr = new XMLHttpRequest();
+    xhr.onreadystatechange = this._onHandShakeXHRStateChange.bind(this, xhr);
+    xhr.onerror = this._onHandShakeXHRError.bind(this, xhr);
+    xhr.open('POST', '/h');
+    var data = new FormData();
+    data.append('pid', this.pid);
+    if (this.needToRenewChannel)
+      data.append('renew', true);
+      this.needToRenewChannel = false;
+    xhr.send(data);
+  },
+  _getRetryTime: function(retryCount) {
+    debug('_getNextRetryTime');
+    return Math.min(120 * 1000,
+                    100 * Math.pow(2, retryCount - 1) * (1 + Math.random()));
+  },
+  _onHandShakeXHRStateChange: function(xhr) {
+    if (xhr.readyState != 4) return;
+    if (xhr.status == 0) {
+      debug('Handshake XHR server error.');
+      this._scheduleHandShake();
+      return;
+    }
+    debug(xhr.responseText);
+    data = {}
+    try{
+      var data = JSON.parse(xhr.responseText);
+    } catch(e) {
+    }
+    if (data['token'] == undefined) {
+      debug('Handshake XHR unexpected format.');
+      this._scheduleHandShake();
+      return;
+    }
+    this.connected = true;
+    this._showPushIframe();
+    this._initChannel(data['token']);
+    this._checkCurrentPos();
+  },
+  _onHandShakeXHRError: function(xhr) {
+    debug('Handshake XHR onerror.');
+    this._scheduleHandShake();
+  },
+  _scheduleHandShake: function() {
+    debug('_scheduleHandShake: ');
+    if (this.waitingForRetry)
+      return;
+    if (this.sessionExpired) {
+      debug('session expired no retry');
+      return;
+    }
+    var timeout = this._getRetryTime(++this.retryCount);
+    this.waitingForRetry = true;
+    debug('_scheduleHandShake: this.retryCount' + this.retryCount + ' + timeout: ' + timeout);
+    setTimeout(this.sendHandShake.bind(this), timeout);
+  },
+  _onSocketOpen: function() {
+    debug('Socket opened');
+    this.retryCount = 0;
+  },
+  _onSocketMessage: function(socket, e) {
+    try{
+      var data = JSON.parse(e.data);
+      if (data['pid'] && data['pid'] != this.pid) {
+        this._onSessionExpire();
+        socket.close();
+        this._cleanupChannelSocket();
+        return;
+      }
+      if (data['chat']) {
+        this._onChatMessage(data['chat']);
+      }
+      if (data['chat_list']) {
+        this._onChatMessageList(data['chat_list']);
+      }
+    } catch(e) {
+    }
+  },
+  _onSessionExpire: function() {
+    this.sessionExpired = true;
+    this._hidePushIframe();
+    document.body.style.opacity = 0.1
+    debug('Session expired closing...');
+  },
+  _onSocketError: function(socket, e) {
+    debug('Socket error: code: ' + e.code + ' description: ' + e.description);
+    if (e.code == 401 || e.code == 400)
+      this.needToRenewChannel = true;
+    socket.close();
+    this._cleanupChannelSocket();
+    this._scheduleHandShake();
+  },
+  _onSocketClose: function() {
+    debug('Socket closed');
+  },
+  _cleanupChannelSocket: function() {
+    debug('_cleanupChannelSocket');
+    var iframes = document.getElementsByTagName('iframe');
+    var targets = [];
+    for (var i = 0; i < iframes.length; ++i) {
+      var iframe = iframes[i];
+      if (iframe.id=='wcs-iframe' || iframe.name=='wcs-iframe')
+        targets.push(iframe);
+    }
+    for (var i = 0; i < targets.length; ++i) {
+      targets[i].parentNode.removeChild(targets[i]);
+    }
+  },
+  _initChannel: function(token) {
+    channel = new goog.appengine.Channel(token);
+    socket = channel.open();
+    socket.onopen = this._onSocketOpen.bind(this);
+    socket.onmessage = this._onSocketMessage.bind(this, socket);
+    socket.onerror = this._onSocketError.bind(this, socket);
+    socket.onclose = this._onSocketClose.bind(this);
+  },
+
+  _showPushIframe: function() {
+    var pushIframe = document.getElementById('push-frame');
+    if (pushIframe)
+      return;
+    if (!navigator.serviceWorker)
+      return;
+    this._sw_register_promise.then(function() {
+          pushIframe = document.createElement('iframe');
+          pushIframe.id = 'push-frame';
+          pushIframe.src = 'push.html';
+          var headerDiv = document.getElementById('header');
+          headerDiv.appendChild(pushIframe);
+        });
+  },
+  _hidePushIframe: function() {
+    var pushIframe = document.getElementById('push-frame');
+    if (!pushIframe)
+      return;
+      pushIframe.parentNode.removeChild(pushIframe);
+  },
+
+  _onMapBoundsChanged: function() {
+    var bounds = this._mapController.getBounds();
+    var z = this._mapController.getZoom();
+    var sw = bounds.getSouthWest();
+    var ne = bounds.getNorthEast();
+    this.currentPosInfo = 'b=' + sw.lat() + ',' + sw.lng() + ',' + ne.lat() + ',' + ne.lng() + '&z=' + z;
+    this._checkCurrentPos();
+  },
+  _checkCurrentPos: function() {
+    if (this.currentPosInfo == this.lastSendPosInfo)
+      return;
+    if (this.isSendPosScheduled)
+      return;
+    if (!this.connected)
+      return;
+    this.isSendPosScheduled = true;
+    this.lastSendPosInfo = this.currentPosInfo;
+    var xhr = new XMLHttpRequest();
+    xhr.onreadystatechange = this._onSendPosXHRStateChange.bind(this, xhr);
+    xhr.onerror = this._onSendPosXHRError.bind(this, xhr);
+    xhr.onclose = this._onSendPosXHRClose.bind(this, xhr);
+    xhr.open('GET', '/p?' + this.currentPosInfo + '&pid=' + this.pid);
+    xhr.send(null);
+    console.log("sending pos");
+    this._mapController.saveCurrentPos();
+  },
+  _onSendPosXHRStateChange: function(xhr) {
+    if (xhr.readyState != 4) return;
+    if (xhr.status == 0) {
+      debug('SendPos XHR server error.');
+      return;
+    }
+    try{
+      var data = JSON.parse(xhr.responseText);
+      if (data['chat_list']) {
+        this._onChatMessageList(data['chat_list']);
+      }
+    } catch(e) {
+      console.log(e);
+    }
+    setTimeout(this._onSendPosWaitFinished.bind(this), 100);
+  },
+  _onSendPosXHRError: function(xhr) {
+    debug('Handshake XHR onerror.');
+    this.isSendPosScheduled = false;
+  },
+  _onSendPosXHRClose: function(xhr) {
+    debug('Handshake XHR onclose.');
+    this.isSendPosScheduled = false;
+  },
+  _onSendPosWaitFinished: function() {
+    this.isSendPosScheduled = false;
+    this._checkCurrentPos();
+  },
+  _onChatMessage: function(chat) {
+    if (this.onchat)
+      this.onchat(chat)
+  },
+  _onChatMessageList: function(chat_list) {
+    if (this.onchatlist)
+      this.onchatlist(chat_list)
+  }
+};
+
+var MapController = function() {
+};
+
+MapController.prototype = {
+  initialize: function() {
+    this._disablePOIInfoWindow();
+    this._drawMapOverlay();
+    var posInfo = this._getSavedPos();
+    var mapOptions = {
+      zoom: posInfo['zoom'],
+      center: new google.maps.LatLng(posInfo['lat'], posInfo['lng']),
+      mapTypeId: google.maps.MapTypeId.ROADMAP,
+      disableDefaultUI: false,
+      streetViewControl: false,
+      panControl: false,
+      zoomControl: false,
+      mapTypeControl: false,
+      scaleControl: false,
+      overviewMapControl: false,
+      mapMaker: false,
+      overviewMapControl: false,
+      maxZoom: 15,
+      minZoom: 2,
+    };
+    this._map = new google.maps.Map(
+        document.getElementById('map-canvas'),
+        mapOptions);
+    window.addEventListener('resize', this._drawMapOverlay.bind(this), false);
+  },
+  getBounds: function() {
+    return this._map.getBounds();
+  },
+  getZoom: function() {
+    return this._map.getZoom();
+  },
+  getCenter: function() {
+    return this._map.getCenter();
+  },
+  saveCurrentPos: function() {
+    var z = this.getZoom();
+    var c = this.getCenter();
+    var posInfo = {
+      lat: c.lat(),
+      lng: c.lng(),
+      zoom: z};
+    localStorage.setItem('pos', JSON.stringify(posInfo));
+  },
+  _getSavedPos: function() {
+    try{
+      var posInfo = JSON.parse(localStorage.getItem('pos'));
+      if (typeof(posInfo['lat']) == 'number' &&
+          typeof(posInfo['lng']) == 'number' &&
+          typeof(posInfo['zoom']) == 'number') {
+        return {
+          lat: posInfo['lat'],
+          lng: posInfo['lng'],
+          zoom: posInfo['zoom']
+        };
+      }
+    } catch(e) {
+    }
+    return {
+      lat: {{lat}},
+      lng: {{lon}},
+      zoom: {{zoom}}
+    }
+  },
+  registerBoundsChangedCallback: function(callback) {
+    google.maps.event.addListener(this._map, 'bounds_changed', callback);
+  },
+  _disablePOIInfoWindow: function() {
+    google.maps.InfoWindow.prototype.set = function () {};
+  },
+  _drawMapOverlay: function() {
+    var canvas = document.getElementById('map-overcanvas');
+    canvas.width = canvas.scrollWidth * 2;
+    canvas.height = canvas.scrollHeight * 2;
+  	var ctx= canvas.getContext('2d');
+    ctx.beginPath();
+    var c = canvas.width * 0.5;
+    var w = Math.min(canvas.width * 0.2, canvas.height * 0.1);
+    ctx.moveTo(c - w, 0);
+    ctx.lineTo(c, canvas.height * 0.5);
+    ctx.lineTo(c + w, 0);
+    ctx.globalAlpha = 0.4;
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fill();
+
+    ctx.globalAlpha = 1;
+    ctx.moveTo(0, 0.5);
+    ctx.lineTo(c - w, 0.5);
+    ctx.lineTo(c, canvas.height * 0.5);
+    ctx.lineTo(c + w, 0.5);
+    ctx.lineTo(canvas.width, 0.5);
+    ctx.stroke();
+  }
+};
+
+var UIController = function() {
+};
+
+UIController.prototype = {
+  initialize: function(mapController, sessionController) {
+    this._mapController = mapController;
+    this._sessionController = sessionController;
+    this.settingsBtn = document.getElementById('settings-btn');
+    this.locationBtn = document.getElementById('location-btn');
+    this.sendBtn = document.getElementById('send-btn');
+    this.inputContent = document.getElementById('input-content');
+    this.cameraBtn = document.getElementById('camera-btn');
+    this.cameraInput = document.getElementById('camera-input');
+    this.cameraPic = document.getElementById('camera-pic');
+    this._disableEnterAndSetMaxChar();
+
+    this.settingsBtn.addEventListener('click', this._onSettingsBtnClicked.bind(this), false);
+    this.locationBtn.addEventListener('click', this._onLocationBtnClicked.bind(this), false);
+    this.sendBtn.addEventListener('click', this.sendBtnClicked.bind(this), false);
+    this.cameraBtn.addEventListener('click', this.cameraBtnClicked.bind(this), false);
+    this.cameraInput.addEventListener('change', this.cameraInputChanged.bind(this), false);
+    this.chatList = this._loadChatList();
+    this.markers = [];
+    this.cameraFile = undefined;
+    sessionController.onchat = this._onChatMessage.bind(this);
+    sessionController.onchatlist = this._onChatMessageList.bind(this);
+
+    this.markerIcon1 = new google.maps.MarkerImage(
+        "./img/red_ball.png",
+        new google.maps.Size(13,13),
+        new google.maps.Point(0,0),
+        new google.maps.Point(6,6));
+    this.markerIcon2 = new google.maps.MarkerImage(
+        "./img/red_big_ball.png",
+        new google.maps.Size(17,17),
+        new google.maps.Point(0,0),
+        new google.maps.Point(8,8));
+    if (this.chatList.length)
+      this._updateChatListView();
+  },
+  _onChatMessage: function(chat) {
+    this.chatList.push(chat);
+    this._updateList();
+  },
+  _onChatMessageList: function(chatlist) {
+    this.chatList = this.chatList.concat(chatlist);
+    this._updateList();
+  },
+  _loadChatList: function(chatlist) {
+    try{
+      var chatList = JSON.parse(localStorage.getItem('chatList'));
+      if (chatList)
+        return chatList;
+    } catch(e) {
+    }
+    return [];
+  },
+  _updateList: function() {
+    var bounds = this._mapController.getBounds();
+    if (!bounds)
+      return;
+    var sw = bounds.getSouthWest();
+    var ne = bounds.getNorthEast();
+    var merge_set = {};
+    for (var i = 0; i < this.chatList.length; ++i) {
+      chat = this.chatList[i];
+      if (chat.lat < sw.lat() || ne.lat() < chat.lat) {
+        continue;
+      }
+      if (ne.lng() < sw.lng()) {
+        if (ne.lng() < chat.lon && chat.lon <  sw.lng())
+          continue;
+      } else {
+        if (chat.lon < sw.lng() || ne.lng() < chat.lon)
+          continue;
+      }
+      chat.mid = chat.epoch + ':' + chat.content;
+      merge_set[chat.mid] = this.chatList[i];
+    }
+    this.chatList = []
+    for(var key in merge_set){
+      this.chatList.push(merge_set[key]);
+    }
+    this.chatList.sort(
+      function(a,b){
+        if( a.date < b.date ) return 1;
+        if( a.date > b.date ) return -1;
+        return 0;
+      }
+    );
+    this._updateChatListView();
+    localStorage.setItem('chatList', JSON.stringify(this.chatList));
+  },
+  _updateChatListView: function() {
+    var old_markers = this.markers;
+    var fragment = document.createDocumentFragment();
+    this.markers = {};
+    for (var i = 0; i < this.chatList.length; ++i) {
+      var chat = this.chatList[i];
+      var marker = undefined;
+      var chatDiv = undefined;
+      if (chat.mid in old_markers) {
+        this.markers[chat.mid] = old_markers[chat.mid];
+        chatDiv = this.markers[chat.mid].chatDiv;
+        chatDiv.parentNode.removeChild(chatDiv);
+        delete old_markers[chat.mid];
+      } else {
+        var latlng = new google.maps.LatLng(parseFloat(chat['lat']), parseFloat(chat['lon']));
+        var marker = new google.maps.Marker({
+          position: latlng,
+          map: this._mapController._map,
+          icon: this.markerIcon1,
+          zIndex : chat.epoch,
+        });
+        chatDiv = this._createchatDiv(chat);
+        chatDiv.addEventListener('click',this._markerClicked.bind(this, chat.mid), false);
+        google.maps.event.addListener(marker, 'click', this._markerClicked.bind(this, chat.mid));
+        this.markers[chat.mid] = {
+          marker: marker,
+          chatDiv: chatDiv,
+          epoch: chat.epoch,
+        };
+      }
+      fragment.appendChild(chatDiv);
+    }
+    for(var mid in old_markers){
+      old_markers[mid].marker.setMap(null);;
+    }
+    var messageDiv = document.getElementById('message-div');
+    while (messageDiv.firstChild) {
+      messageDiv.removeChild(messageDiv.firstChild);
+    }
+    messageDiv.appendChild(fragment);
+  },
+  _markerClicked: function(target_mid) {
+    for(var mid in this.markers){
+      var markerInfo = this.markers[mid];
+      var marker = markerInfo.marker;
+      if (mid == target_mid) {
+        if (marker.getIcon() != this.markerIcon2) {
+          marker.setIcon(this.markerIcon2);
+          marker.setZIndex(2000000000);
+        }
+        markerInfo.chatDiv.classList.add('chat-selected');
+      } else {
+        if (marker.getIcon() != this.markerIcon1) {
+          marker.setIcon(this.markerIcon1);
+        }
+        markerInfo.chatDiv.classList.remove('chat-selected');
+        marker.setZIndex(markerInfo.epoch);
+      }
+    }
+  },
+  _createchatDiv: function(chat) {
+    var chatDiv = document.createElement('div');
+    chatDiv.className = 'chat';
+    var contentDiv = document.createElement('div');
+    contentDiv.className = 'chat-content';
+    contentDiv.appendChild(document.createTextNode(chat['content']));
+    chatDiv.appendChild(contentDiv);
+
+    var chatInfoDiv = document.createElement('div');
+    chatInfoDiv.className = 'chat-info';
+    if (chat['user_name']) {
+      var userNameDiv = document.createElement('div');
+      userNameDiv.className = 'chat-user-name';
+      userNameDiv.appendChild(document.createTextNode(chat['user_name']));
+      chatInfoDiv.appendChild(userNameDiv);
+    }
+    if (chat['date']) {
+      var dateDiv = document.createElement('div');
+      dateDiv.className = 'chat-date';
+      dateDiv.appendChild(document.createTextNode(this._getDateString(new Date(chat['date']))));
+      chatInfoDiv.appendChild(dateDiv);
+    }
+    chatDiv.appendChild(chatInfoDiv);
+
+    if (chat['image'] && chat['image'][0]) {
+      var image_info = chat['image'][0];
+      var chatImageDiv = document.createElement('div');
+      chatImageDiv.className = 'chat-image-div';
+      var chatImage = document.createElement('img');
+      var image_max = Math.ceil(window.innerWidth / 2);
+      var image_width = image_info.width;
+      var image_height = image_info.height;
+      if (image_max < image_width) {
+        image_width = image_max;
+        image_height = Math.ceil(image_width * image_info.height / image_info.width);
+      }
+      if (image_max < image_height) {
+        image_height = image_max;
+        image_width = Math.ceil(image_height * image_info.width / image_info.height);
+      }
+      var imageLink = document.createElement('a');
+      if (image_info.width == 2 * image_info.height) {
+        imageLink.href = './view360.html#' + encodeURIComponent(image_info.url + "=s" + image_info.width);
+      } else {
+        imageLink.href  = image_info.url + "=s" + image_info.width;
+      }
+      imageLink.target = '_blank';
+      var image_size = (image_width > image_height) ? image_width : image_height;
+      chatImage.src = image_info.url + "=s" + image_size;
+      chatImage.width = image_width;
+      chatImage.border = 0;
+      chatImage.height = image_height;
+      imageLink.appendChild(chatImage);
+      chatImageDiv.appendChild(imageLink);
+      chatDiv.appendChild(chatImageDiv);
+    }
+    return chatDiv;
+  },
+  _getDateString: function(date) {
+    var now = new Date();
+    var YYYY = date.getFullYear();
+    var MM = ('0' + (date.getMonth() + 1)).slice(-2);
+    var DD = ('0' + date.getDate()).slice(-2);
+    var hh = ('0' + date.getHours()).slice(-2);
+    var mm = ('0' + date.getMinutes()).slice(-2);
+    if (now.getFullYear() != date.getFullYear())
+      return YYYY + '/' + MM + '/' + DD + ' ' + hh + ':' + mm;
+    else if (now.getMonth() != date.getMonth() || now.getDate() != date.getDate())
+      return MM + '/' + DD + ' ' + hh + ':' + mm;
+    else
+      return hh + ':' + mm;
+
+  },
+  _disableEnterAndSetMaxChar: function() {
+    var MAX_LENGTH = 140;
+    this.inputContent.addEventListener('keydown', (function(e) {
+        if (e.which == 13) {
+          this.sendBtnClicked();
+          return e.preventDefault();
+        }
+      }).bind(this));
+    this.inputContent.addEventListener('keypress', (function(e) {
+        if (this.inputContent.value.length > MAX_LENGTH)
+            return e.preventDefault();
+      }).bind(this));
+    this.inputContent.addEventListener('blur', (function(e) {
+        var txt = this.inputContent.value;
+        var new_txt = txt.replace(/\n/g, '');
+        if (txt != new_txt)
+          this.inputContent.value = new_txt;
+      }).bind(this));
+    this.inputContent.addEventListener('change', (function(e) {
+        if (this.inputContent.value.length > MAX_LENGTH) {
+          this.inputContent.value = this.inputContent.value.substring(0, MAX_LENGTH);
+        }
+      }).bind(this));
+  },
+  _onSettingsBtnClicked: function() {
+    var xhr = new XMLHttpRequest();
+    xhr.onreadystatechange = (function() {
+      if (xhr.readyState != 4)
+        return;
+      var user_name = "Anonymous";
+      try{
+        var data = JSON.parse(xhr.responseText);
+        if (data['user_name']) {
+          user_name = data['user_name'];
+        }
+      } catch(e) {
+      }
+      debug(xhr.responseText);
+      var new_user_name = prompt("Please enter your name.", user_name);
+      if (!new_user_name)
+        return;
+      var changeXhr = new XMLHttpRequest();
+      changeXhr.open('POST', '/n');
+      var data = new FormData();
+      data.append('pid', this._sessionController.pid);
+      data.append('name', new_user_name);
+      changeXhr.send(data);
+    }).bind(this);
+    xhr.open('POST', '/u');
+    xhr.send(null);
+  },
+  _onLocationBtnClicked: function() {
+    this.locationBtn.classList.add('searching');
+    navigator.geolocation.getCurrentPosition(
+      this._onLocationSuccess.bind(this),
+      this._onLocationFailure.bind(this),
+      {
+        enableHighAccuracy:true,
+        timeout:15000,
+        maximumAge:600000
+      });
+  },
+  _onLocationSuccess: function(position) {
+    this.locationBtn.classList.remove('searching');
+    this._mapController._map.panTo(new google.maps.LatLng(
+        position.coords.latitude,
+        position.coords.longitude));
+  },
+  _onLocationFailure: function(err) {
+    console.log(err);
+    this.locationBtn.classList.remove('searching');
+  },
+  sendBtnClicked: function() {
+      if (this.inputContent.value.length == 0)
+        return;
+      var latlon = this._mapController._map.getCenter();
+      var lat = latlon.lat();
+      var lon = latlon.lng();
+      if (lon > 180.0)
+        lon -= 360.0;
+      var content = window.btoa(unescape(encodeURIComponent(this.inputContent.value)));
+      var data = {
+        pid: this._sessionController.pid,
+        lat: lat,
+        lon: lon,
+        content: content,
+        file: this.cameraFile
+      };
+      this.inputContent.value = '';
+      this.cameraFile = undefined;
+      this.cameraPic.src = '';
+      this.cameraPic.classList.add('camera-pic-hidden');
+      if (navigator.serviceWorker && window.SyncManager) {
+        this._sendMassageWithSync(data)
+          .catch((function(){
+            this._sendMessage(data);
+          }).bind(this));
+      } else {
+        this._sendMessage(data);
+      }
+  },
+  _sendMassageWithSync: function(data) {
+    var UPLOAD_INFO_CACHE_NAME = 'upload_info';
+    var UPLOAD_DATA_CACHE_NAME = 'upload_data';
+    var id = '/' + Math.random();
+    var new_data = {
+      id: id,
+      pid: data.pid,
+      lat: data.lat,
+      lon: data.lon,
+      content: data.content
+    };
+    if (data.file) {
+      new_data.file= {
+        name: data.file.name,
+        size: data.file.size,
+        type: data.file.type,
+        id: id};
+    }
+    return Promise.resolve().then(function() {
+        if (!data.file)
+          return Promise.resolve();
+        return caches.open(UPLOAD_DATA_CACHE_NAME)
+          .then(function(data_cache) {
+              return data_cache.put(new Request(id), new Response(data.file));
+            });
+      })
+      .then(function () {
+        return caches.open(UPLOAD_INFO_CACHE_NAME)
+          .then(function(info_cache) {
+              return info_cache.put(new Request(id), new Response(JSON.stringify(new_data)));
+            });
+      })
+      .then(function() { return navigator.serviceWorker.ready; })
+      .then(function(reg) {
+        return reg.sync.register('send-msg' + id);
+      });
+  },
+  _sendMessage: function(data) {
+    var formdata = new FormData();
+    formdata.append('pid', data.pid);
+    formdata.append('lat', data.lat);
+    formdata.append('lon', data.lon);
+    formdata.append('content', data.content);
+    if (data.file) {
+      formdata.append('file', data.file);
+      this._sendWithImage(formdata);
+      return;
+    }
+    var xhr = new XMLHttpRequest();
+    xhr.onreadystatechange = (function() {
+      if (xhr.readyState != 4)
+        return;
+      this.sendBtn.disabled = false;
+      if (xhr.status == 0) {
+        console.log('error')
+        return;
+      }
+      debug(xhr.responseText);
+    }).bind(this);
+    xhr.open('POST', '/m');
+    this.sendBtn.disabled = true;
+    xhr.send(formdata);
+  },
+  _sendWithImage: function(formdata) {
+    var xhr = new XMLHttpRequest();
+    xhr.onreadystatechange = (function() {
+      if (xhr.readyState != 4)
+        return;
+      this.sendBtn.disabled = false;
+      if (xhr.status == 0) {
+        console.log('error')
+        return;
+      }
+      var retData = JSON.parse(xhr.responseText);
+      var sendXhr = new XMLHttpRequest();
+      sendXhr.open('POST', retData['url']);
+      sendXhr.send(formdata);
+    }).bind(this);
+    xhr.open('POST', '/bu');
+    this.sendBtn.disabled = true;
+    xhr.send(null);
+  },
+  cameraBtnClicked: function() {
+    this.cameraFile = undefined;
+    this.cameraPic.src = '';
+    this.cameraPic.classList.add('camera-pic-hidden');
+    this.cameraInput.click();
+  },
+  cameraInputChanged: function() {
+    if (this.cameraInput.files.length == 0) {
+      return;
+    }
+    var file = this.cameraInput.files[0];
+    this.cameraFile = file;
+    var fr = new FileReader();
+    fr.onload = (function(e) {
+      this.cameraPic.src = e.target.result;
+      this.cameraPic.classList.remove('camera-pic-hidden');
+    }).bind(this);
+    fr.readAsDataURL(file);
+  },
+};
+
+function onLoad() {
+  var sessionController = new PageSessionController();
+  var mapController = new MapController();
+  var uiController = new UIController();
+
+  mapController.initialize();
+  sessionController.initialize(mapController);
+  uiController.initialize(mapController, sessionController);
+
+  if (!document.hidden) {
+    sessionController.sendHandShake();
+  } else {
+    var callback = function () {
+      console.log('removeEventListener '  + new Date());
+      document.removeEventListener('visibilitychange', callback, false);
+      sessionController.sendHandShake();
+    }
+    console.log('addEventListener '  + new Date());
+    document.addEventListener('visibilitychange', callback, false);
+  }
+}
+
+if (navigator.userAgent.toLowerCase().indexOf('googlebot') == -1) {
+  google.maps.event.addDomListener(window, 'load', onLoad);
+} else {
+  var messageDiv = document.getElementById('message-div');
+  messageDiv.appendChild(document.createTextNode('Location based Chat without creating any account.'));
+}
+
+if (navigator.serviceWorker) {
+  navigator.serviceWorker.addEventListener('message', function(msg) {
+      if (msg.data == 'reload')
+        location.reload();
+    }, false);
+}
+
+if (location.href.substr(0, 20) == 'https://locchat.com/'){
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-71600248-1', 'auto');
+  ga('send', 'pageview');
+}
+    </script>
+  </head>
+  <body>
+      <div id="header">
+        <button id="settings-btn"></button>
+        <div id="title">LocChat</div>
+        <button id="location-btn"></button>
+        <button id="send-btn"></button>
+      </div>
+      <div id="content-main">
+        <div id="input-form">
+          <textarea id="input-content"></textarea>
+          <img id="camera-pic" class="camera-pic-hidden">
+          <button id="camera-btn"></button>
+          <form>
+            <input id="camera-input" type="file" accept="image/jpeg, image/gif, image/png" name="files[]">
+          </form>
+        </div>
+        <div id="map-container">
+          <canvas id="map-overcanvas"></canvas>
+          <div id="map-canvas"></div>
+        </div>
+    </div>
+    <div id="message-div"></div>
+  </body>
+</html>
+{% endautoescape %}

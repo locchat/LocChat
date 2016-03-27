@@ -1,0 +1,25 @@
+{
+  "name": "LocChat",
+  "short_name": "LocChat",
+  "icons": [{
+        "src": "img/locchat_192.png",
+        "sizes": "192x192",
+        "type": "image/png"
+      },
+      {
+        "src": "img/locchat_256.png",
+        "sizes": "256x256",
+        "type": "image/png"
+      },
+      {
+        "src": "img/locchat_512.png",
+        "sizes": "512x512",
+        "type": "image/png"
+      }],
+  "display": "standalone",
+  "gcm_sender_id": "152730706490",
+  "gcm_user_visible_only": true,
+  "start_url": "/?homescreen",
+  "display": "standalone",
+  "orientation": "portrait"
+}

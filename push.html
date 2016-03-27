@@ -1,0 +1,192 @@
+<html>
+  <head>
+    <title>Push</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="viewport" content="initial-scale=1.0, user-scalable=no">
+    <meta charset="utf-8">
+    <style>
+      html, body {
+        background-color: #eee;
+        height: 100%;
+        margin: 0px;
+        padding: 0px
+      }
+      #push-btn {
+        outline: none;
+        position: absolute;
+        top: 0px;
+        width: 28px;
+        height: 28px;
+        left: 0px;
+        padding: 0;
+        border: 0;
+        margin: 0;
+        background-color: #eee;
+      }
+      #push-btn:active {
+        opacity: 0.7;
+      }
+      #push-btn:disabled {
+        opacity: 0.1;
+      }
+      #push-btn.notification-on {
+        background: url(img/ic_notifications_active_24px.svg) left top no-repeat;
+        background-size: 100%;
+      }
+      #push-btn.notification-off {
+        background: url(img/ic_notifications_none_24px.svg) left top no-repeat;
+        background-size: 100%;
+      }
+      #push-btn.notification-disabled {
+        background: url(img/ic_notifications_off_24px.svg) left top no-repeat;
+        background-size: 100%;
+      }
+    </style>
+    <script>
+var isPushEnabled = false;
+
+function setBtnNotificationOn(pushButton) {
+  pushButton.classList.add('notification-on');
+  pushButton.classList.remove('notification-off');
+  pushButton.classList.remove('notification-disabled');
+}
+
+function setBtnNotificationOff(pushButton) {
+  pushButton.classList.add('notification-off');
+  pushButton.classList.remove('notification-on');
+  pushButton.classList.remove('notification-disabled');
+}
+
+function setBtnNotificationDisabled(pushButton) {
+  pushButton.classList.add('notification-disabled');
+  pushButton.classList.remove('notification-on');
+  pushButton.classList.remove('notification-off');
+}
+
+window.addEventListener('load', function() {
+  var pushButton = document.getElementById('push-btn');
+  pushButton.addEventListener('click', function() {
+    if (isPushEnabled) {
+      unsubscribe();
+    } else {
+      subscribe();
+    }
+  });
+  initialiseState();
+});
+
+function initialiseState() {
+  var pushButton = document.getElementById('push-btn');
+  if (!('showNotification' in ServiceWorkerRegistration.prototype)) {
+    console.warn('Notifications aren\'t supported.');
+    return;
+  }
+  if (Notification.permission === 'denied') {
+    console.warn('The user has blocked notifications.');
+    setBtnNotificationDisabled(pushButton);
+    return;
+  }
+  if (!('PushManager' in window)) {
+    console.warn('Push messaging isn\'t supported.');
+    return;
+  }
+  navigator.serviceWorker.ready.then(function(serviceWorkerRegistration) {
+    serviceWorkerRegistration.pushManager.getSubscription()
+      .then(function(subscription) {
+        pushButton.disabled = false;
+
+        if (!subscription) {
+          setBtnNotificationOff(pushButton);
+          subscribe();
+          return;
+        }
+        sendSubscriptionToServer(subscription);
+        setBtnNotificationOn(pushButton);
+        isPushEnabled = true;
+      })
+      .catch(function(err) {
+        console.warn('Error during getSubscription()', err);
+      });
+  });
+}
+
+function subscribe() {
+  var pushButton = document.getElementById('push-btn');
+  pushButton.disabled = true;
+
+  navigator.serviceWorker.ready.then(function(serviceWorkerRegistration) {
+    serviceWorkerRegistration.pushManager.subscribe({userVisibleOnly: true})
+      .then(function(subscription) {
+        isPushEnabled = true;
+        setBtnNotificationOn(pushButton);
+        pushButton.disabled = false;
+        return sendSubscriptionToServer(subscription);
+      })
+      .catch(function(e) {
+        if (Notification.permission === 'denied') {
+          console.warn('Permission for Notifications was denied');
+          setBtnNotificationDisabled(pushButton);
+          pushButton.disabled = true;
+        } else {
+          console.error('Unable to subscribe to push.', e);
+          setBtnNotificationOff(pushButton);
+          pushButton.disabled = false;
+        }
+      });
+  });
+}
+
+function sendSubscriptionToServer(subscription) {
+  console.log(subscription.endpoint);
+  var endpoint = subscription.endpoint;
+  if ('subscriptionId' in subscription && !endpoint.includes(subscription.subscriptionId)) {
+      endpoint += "/" + subscription.subscriptionId;
+  }
+  var xhr = new XMLHttpRequest();
+  xhr.open('POST', '/subscribe');
+  var data = new FormData();
+  data.append('endpoint', endpoint);
+  xhr.send(data);
+}
+
+function sendUnsubscriptionToServer() {
+  var xhr = new XMLHttpRequest();
+  xhr.open('POST', '/unsubscribe');
+  xhr.send(null);
+}
+
+function unsubscribe() {
+  var pushButton = document.getElementById('push-btn');
+  pushButton.disabled = true;
+
+  navigator.serviceWorker.ready.then(function(serviceWorkerRegistration) {
+    serviceWorkerRegistration.pushManager.getSubscription().then(
+      function(pushSubscription) {
+        if (!pushSubscription) {
+          isPushEnabled = false;
+          pushButton.disabled = false;
+          setBtnNotificationOff(pushButton);
+          return;
+        }
+        sendUnsubscriptionToServer();
+
+        pushSubscription.unsubscribe().then(function(successful) {
+          pushButton.disabled = false;
+          setBtnNotificationOff(pushButton);
+          isPushEnabled = false;
+        }).catch(function(e) {
+          console.log('Unsubscription error: ', e);
+          pushButton.disabled = false;
+          setBtnNotificationOff(pushButton);
+        });
+      }).catch(function(e) {
+        console.error('Error thrown while unsubscribing from push messaging.', e);
+      });
+  });
+}
+
+    </script>
+  </head>
+<body>
+<button id="push-btn" disabled></button>
+<body>

@@ -1,0 +1,37 @@
+application: locchat
+version: 1
+runtime: python27
+api_version: 1
+threadsafe: yes
+
+handlers:
+- url: /favicon\.ico
+  static_files: favicon.ico
+  upload: favicon\.ico
+- url: /sw_main\.js
+  static_files: sw_main.js
+  upload: sw_main\.js
+- url: /push\.html
+  static_files: push.html
+  upload: push\.html
+- url: /view360\.html
+  static_files: view360.html
+  upload: view360\.html
+- url: /manifest\.json
+  static_files: manifest.json
+  upload: manifest\.json
+- url: /img
+  static_dir: img
+- url: /push
+  static_dir: push
+- url: .*
+  script: main.app
+
+libraries:
+- name: webapp2
+  version: "2.5.2"
+- name: jinja2
+  version: latest
+
+builtins:
+- appstats: on

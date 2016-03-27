@@ -1,0 +1,323 @@
+<html>
+<head>
+<title>Photo view</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+<style>
+body {
+  background-color: #000000;
+  margin: 0px;
+  overflow: hidden;
+}
+#container {
+  position: absolute;
+  padding: 0;
+  border: 0;
+  margin: 0;
+}
+</style>
+<script>
+var view;
+var MirrorView = function() {
+  this._lon = 90;
+  this._lat = 0;
+  this._ballSize = 0.5;
+  this._scale = 1.0;
+  this._mouseTracking = false;
+  this._mouseDownPosX = 0;
+  this._mouseDownPosY = 0;
+  this._mouseDownLon = 0;
+  this._mouseDownLat = 0;
+  this._lastTouches = [];
+  this._doubleTouchStartLat = 0;
+  this._doubleTouchStartLon = 0;
+  this._doubleTouchStartPos = 0;
+  this._needsUpdate = true;
+};
+MirrorView.prototype = {
+  initialize: function(img) {
+    this._canvas = document.createElement('canvas');
+  	this._canvas.width  = window.innerWidth;
+  	this._canvas.height = window.innerHeight;
+    var container = document.getElementById('container');
+    window.addEventListener('resize', this._onWindowResize.bind(this), false);
+    container.addEventListener('mousedown', this._onMouseDown.bind(this), false);
+    container.addEventListener('mousemove', this._onMouseMove.bind(this), false);
+    container.addEventListener('mouseup', this._onMouseUp.bind(this), false);
+    container.addEventListener('mousewheel', this._onMouseWheel.bind(this), false);
+    container.addEventListener('DOMMouseScroll', this._onMouseWheel.bind(this), false);
+    container.addEventListener('touchstart', this._onTouchStart.bind(this), false);
+    container.addEventListener('touchmove', this._onTouchMove.bind(this), false);
+    container.addEventListener('touchend', this._onTouchEnd.bind(this), false);
+
+    container.appendChild(this._canvas);
+    this._gl = this._canvas.getContext('webgl') || this._canvas.getContext('experimental-webgl');
+    this._gl.viewport(0, 0, this._gl.drawingBufferWidth, this._gl.drawingBufferHeight);
+    var buffer = this._gl.createBuffer();
+    this._gl.bindBuffer(this._gl.ARRAY_BUFFER, buffer);
+    this._gl.bufferData(
+      this._gl.ARRAY_BUFFER,
+      new Float32Array([-1.0, -1.0, 1.0, -1.0, -1.0, 1.0, -1.0, 1.0, 1.0, -1.0, 1.0,  1.0]),
+      this._gl.STATIC_DRAW);
+    var vertexShader = this._gl.createShader(this._gl.VERTEX_SHADER);
+    this._gl.shaderSource(vertexShader, document.getElementById("vertex-shader").text);
+    this._gl.compileShader(vertexShader);
+
+    var fragmentShader = this._gl.createShader(this._gl.FRAGMENT_SHADER);
+    this._gl.shaderSource(fragmentShader, document.getElementById("fragment-shader").text);
+    this._gl.compileShader(fragmentShader);
+
+    var program = this._gl.createProgram();
+    this._gl.attachShader(program, vertexShader);
+    this._gl.attachShader(program, fragmentShader);
+    this._gl.linkProgram(program);
+    this._gl.useProgram(program);
+
+    var positionLocation = this._gl.getAttribLocation(program, "pos");
+    this._gl.enableVertexAttribArray(positionLocation);
+    this._gl.vertexAttribPointer(positionLocation, 2, this._gl.FLOAT, false, 0, 0);
+
+    this._camLon_loc = this._gl.getUniformLocation(program, 'camLon');
+    this._camLat_loc = this._gl.getUniformLocation(program, 'camLat');
+    this._ballSize_loc = this._gl.getUniformLocation(program, 'ballSize');
+    this._scale_loc = this._gl.getUniformLocation(program, 'scale');
+    this._texture_loc = this._gl.getUniformLocation(program, 'texture');
+    this._dispSize_loc = this._gl.getUniformLocation(program, 'dispSize');
+    this._gl.uniform2f(this._dispSize_loc, this._canvas.width, -this._canvas.height);
+
+    this._texture = this._gl.createTexture();
+    this._gl.bindTexture(this._gl.TEXTURE_2D, this._texture);
+    this._gl.texImage2D(this._gl.TEXTURE_2D, 0, this._gl.RGBA, this._gl.RGBA, this._gl.UNSIGNED_BYTE, img);
+    this._gl.generateMipmap(this._gl.TEXTURE_2D);
+    this._gl.texParameteri(this._gl.TEXTURE_2D, this._gl.TEXTURE_MIN_FILTER, this._gl.LINEAR);
+    this._gl.texParameteri(this._gl.TEXTURE_2D, this._gl.TEXTURE_MAG_FILTER, this._gl.LINEAR);
+  	this._gl.texParameteri(this._gl.TEXTURE_2D, this._gl.TEXTURE_WRAP_S, this._gl.REPEAT);
+  	this._gl.texParameteri(this._gl.TEXTURE_2D, this._gl.TEXTURE_WRAP_T, this._gl.REPEAT);
+    this._gl.bindTexture(this._gl.TEXTURE_2D, null);
+
+  	this._render();
+  },
+  _onMouseDown: function(event) {
+    event.preventDefault();
+    this._mouseTracking = true;
+    this._mouseDownPosX = event.clientX;
+    this._mouseDownPosY = event.clientY;
+    this._mouseDownLon = this._lon;
+    this._mouseDownLat = this._lat;
+  },
+  _onMouseMove: function(event) {
+    if (!this._mouseTracking)
+      return;
+    this._lon = -(event.clientX - this._mouseDownPosX) * 0.1 + this._mouseDownLon;
+    this._lat = -(event.clientY - this._mouseDownPosY) * 0.1 + this._mouseDownLat;
+    this._needsUpdate = true;
+  },
+  _onMouseUp: function(event) {
+    this._mouseTracking = false;
+  },
+  _setScale: function(scale) {
+    if (scale > 3)
+      scale = 3;
+    if (scale < 0.5)
+      scale = 0.5;
+    this._scale = scale;
+  },
+  _onMouseWheel: function(event) {
+    if (event.wheelDeltaY) { // WebKit
+      this._setScale(this._scale - event.wheelDeltaY * 0.01);
+    } else if (event.wheelDelta) { // Opera / Explorer 9
+      this._setScale(this._scale - event.wheelDelta * 0.01);
+    } else if (event.detail) { // Firefox
+      this._setScale(this._scale + event.detail * 0.2);
+    }
+    this._needsUpdate = true;
+  },
+  _updateLastTouches: function(touches) {
+    this._lastTouches = [];
+    for (var i = 0; i < touches.length; ++i) {
+      this._lastTouches.push({
+          clientX: touches[i].clientX,
+          clientY: touches[i].clientY
+        });
+    }
+  },
+  _touchDist: function(touch1, touch2) {
+    var xDiff = touch1.clientX - touch2.clientX;
+    var yDiff = touch1.clientY - touch2.clientY;
+    return Math.sqrt(xDiff * xDiff + yDiff * yDiff);
+  },
+  _touchCenter: function(touch1, touch2) {
+    return {
+      clientX: (touch1.clientX + touch2.clientX) / 2,
+      clientY: (touch1.clientY + touch2.clientY) / 2
+    };
+  },
+  _touchDiff: function(touch1, touch2) {
+    return {
+      clientX: touch1.clientX - touch2.clientX,
+      clientY: touch1.clientY - touch2.clientY
+    };
+  },
+  _onTouchStart: function(event) {
+    event.preventDefault();
+    if (this._lastTouches.length < 2 && event.touches.length == 2) {
+      this._doubleTouchStartPos = this._touchCenter(event.touches[0], event.touches[1]);
+      this._doubleTouchStartLon = this._lon;
+      this._doubleTouchStartLat = this._lat;
+    }
+    this._updateLastTouches(event.touches);
+  },
+  _onTouchMove: function(event) {
+    if (this._lastTouches.length == 2 && event.touches.length == 2) {
+      this._setScale(this._scale * this._touchDist(event.touches[0], event.touches[1]) / this._touchDist(this._lastTouches[0], this._lastTouches[1]));
+      var diff = this._touchDiff(this._touchCenter(event.touches[0], event.touches[1]), this._doubleTouchStartPos);
+      this._lon = -diff.clientX * 0.1 + this._doubleTouchStartLon;
+      this._lat = -diff.clientY * 0.2 + this._doubleTouchStartLat;
+      this._needsUpdate = true;
+    }
+    if (this._lastTouches.length == 1 && event.touches.length == 1) {
+      var diff = this._touchDiff(event.touches[0], this._lastTouches[0]);
+      this._lon = -diff.clientX * 0.1 + this._lon;
+      this._lat = -diff.clientY * 0.2 + this._lat;
+      this._needsUpdate = true;
+    }
+    this._updateLastTouches(event.touches);
+  },
+  _onTouchEnd: function(event) {
+    this._updateLastTouches(event.touches);
+  },
+  _onWindowResize: function() {
+    this._canvas.width  = window.innerWidth;
+    this._canvas.height = window.innerHeight;
+    this._gl.viewport(0, 0, this._gl.drawingBufferWidth, this._gl.drawingBufferHeight);
+    this._gl.uniform2f(this._dispSize_loc, this._canvas.width, -this._canvas.height);
+    this._needsUpdate = true;
+  },
+  _render: function() {
+    window.requestAnimationFrame(this._render.bind(this), this._canvas);
+    if (this._lastTouches.length == 0 && !this._mouseTracking) {
+      this._lon += 0.05;
+      this._needsUpdate = true;
+    }
+    if (!this._needsUpdate)
+      return;
+    this._needsUpdate = false;
+    this._lat = Math.max(-85, Math.min(85, this._lat));
+    this._gl.uniform1f(this._camLon_loc, this._lon * 3.141592 / 180.0);
+    this._gl.uniform1f(this._camLat_loc, this._lat * 3.141592 / 180.0);
+    this._gl.uniform1f(this._ballSize_loc, this._ballSize);
+    this._gl.uniform1f(this._scale_loc, this._scale);
+
+    this._gl.bindTexture(this._gl.TEXTURE_2D, this._texture);
+
+    this._gl.uniform1i(this._texture_loc, 0);
+    this._gl.drawArrays(this._gl.TRIANGLES, 0, 6);
+  }
+};
+window.addEventListener('load', init, false);
+
+function isPowOfTwo(value) {
+	return (value & (value - 1)) === 0 && value !== 0;
+}
+function nearestPowOfTwo ( value ) {
+	return Math.pow(2, Math.round(Math.log( value ) / Math.LN2));
+}
+
+function init() {
+  var img = new Image();
+  img.addEventListener('load', (function() {
+    if (isPowOfTwo(img.width) && isPowOfTwo(img.height)) {
+      view = new MirrorView();
+      view.initialize(img);
+      return;
+    }
+    var c = document.createElement('canvas');
+    c.width = nearestPowOfTwo(img.width);
+    c.height = nearestPowOfTwo(img.height);
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    view = new MirrorView();
+    view.initialize(c);
+  }).bind(this),false);
+  var url = new URL(decodeURIComponent(location.hash.substring(1)));
+  if (url.host != location.host) {
+    img.crossOrigin='anonymous';
+  }
+  img.src = url.href;
+}
+
+if (location.href.substr(0, 20) == 'https://locchat.com/'){
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-71600248-1', 'auto');
+  ga('send', 'pageview');
+}
+</script>
+<script id="vertex-shader" type="x-shader/x-vertex">// <![CDATA[
+attribute vec2 pos;
+void main() {
+  gl_Position = vec4(pos, 0, 1);
+}
+// ]]></script>
+<script id="fragment-shader" type="x-shader/x-fragment">// <![CDATA[
+#define PI 3.1415925358979
+#define PI2 6.2831850718
+precision highp float;
+uniform float camLon;
+uniform float camLat;
+uniform float ballSize;
+uniform float scale;
+
+uniform sampler2D texture;
+uniform vec2 dispSize;
+
+vec3 rotate(float angle, vec3 axis, vec3 p){
+  float s = sin(angle);
+  float c = cos(angle);
+  vec3 a = normalize(axis);
+  float r = 1.0 - c;
+  return mat3(
+      a.x * a.x * r + c,
+      a.y * a.x * r + a.z * s,
+      a.z * a.x * r - a.y * s,
+      a.x * a.y * r - a.z * s,
+      a.y * a.y * r + c,
+      a.z * a.y * r + a.x * s,
+      a.x * a.z * r + a.y * s,
+      a.y * a.z * r - a.x * s,
+      a.z * a.z * r + c) * p;
+}
+
+void main() {
+  vec2 v;
+  float aspect = dispSize.x / dispSize.y;
+  v = vec2((gl_FragCoord.x - 0.5*dispSize.x) / (dispSize.y * scale), (gl_FragCoord.y + 0.5 * dispSize.y)/ (dispSize.y * scale));
+  float v2;
+  v2 = v.x * v.x + v.y * v.y;
+  if (v2 > ballSize / (1.0 - ballSize)) {
+    gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+    return;
+  }
+  float v_size;
+  v_size = sqrt(v2);
+  float theta = atan(v_size, 1.0);
+  float phi_theta = atan(v_size, sqrt(ballSize + ballSize * v2 - v2));
+  float phi2theta = 2.0  * phi_theta - theta;
+  float lon_org = atan(v.x * sin(phi2theta), v_size * cos(phi2theta));
+  float lat_org = asin(v.y * sin(phi2theta) / v_size);
+  vec3 p1_pos = vec3(cos(camLat), sin(camLat), 0);
+  vec3 axis1 = vec3(-sin(camLat), cos(camLat), 0);
+  vec3 p2_pos = rotate(lon_org, axis1, p1_pos);
+  vec3 axis2 = rotate(lon_org, axis1, vec3(0, 0, 1));
+  vec3 p3_pos = rotate(lat_org, axis2, p2_pos);
+  float lon = atan(p3_pos.z, p3_pos.x);
+  float lat = atan(p3_pos.y, sqrt(p3_pos.x * p3_pos.x + p3_pos.z * p3_pos.z));
+  gl_FragColor = texture2D(texture, vec2((lon  / PI2) + camLon, lat / PI + 0.5));
+}
+// ]]></script>
+</head>
+<div id="container"></div>
+</body>
+</html>
