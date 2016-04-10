@@ -602,9 +602,6 @@ class PostMessageHandler(BaseHandler):
         if not user_info:
             logging.info('user_info not match')
             return
-        if user_info.pid != str(pid):
-            logging.info('pid not match [' + user_info.pid + '][' + str(pid) + ']')
-            return
         lat = float(self.request.get('lat'))
         lon = float(self.request.get('lon'))
         content = self.request.get('content')
@@ -959,7 +956,7 @@ class ServiceWorkerScriptHandler(BaseHandler):
         self.response.headers['Content-Type'] = 'application/javascript'
         self.response.headers['Pragma'] = 'no-cache'
         self.response.headers['Cache-Control'] = 'no-cache'
-        self.response.write('importScripts(\'sw_main.js?2\');')
+        self.response.write('importScripts(\'sw_main.js?3\');')
 
 
 app = webapp2.WSGIApplication([

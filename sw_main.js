@@ -122,54 +122,7 @@ self.addEventListener('notificationclick', function(evt) {
   );
 }, false);
 
-var UPLOAD_INFO_CACHE_NAME = 'upload_info';
-var UPLOAD_DATA_CACHE_NAME = 'upload_data';
 
-function getPendingRequests() {
-  return new Promise(function(resolve) {
-    var info_jsons;
-    caches.open(UPLOAD_INFO_CACHE_NAME)
-      .then(function(info_cache) { return info_cache.matchAll(); })
-      .then(function(info_responses) {
-          return Promise.all(info_responses.map(function(response) {
-            return response.json();
-          }));
-        })
-      .then(function(jsons) {
-          info_jsons = jsons;
-          return caches.open(UPLOAD_DATA_CACHE_NAME)
-            .then(function(data_cache) {
-                return Promise.all(jsons.map(function(json) {
-                  if (json.file && json.file.id)
-                    return data_cache.match(json.file.id);
-                  return Promise.resolve(null);
-                }));
-              });
-        })
-      .then(function(responses) {
-          return Promise.all(responses.map(function(response) {
-              if (!response)
-                return null;
-              return response.blob();
-            }));
-        })
-      .then(function(blobs) {
-          var pendingRequests = [];
-          for (var i = 0; i < info_jsons.length; ++i) {
-            var info = info_jsons[i];
-            if (info.file)
-              info.file = new File([blobs[i]], info.file.name, {type: info.file.type});
-            pendingRequests.push(info);
-          }
-          resolve(pendingRequests);
-        })
-      .catch(function(e) {
-          console.error(e);
-          Promise.all([caches.delete(UPLOAD_INFO_CACHE_NAME), caches.delete(UPLOAD_DATA_CACHE_NAME)])
-            .then(function(){resolve([]);}, function(){resolve([]);});
-        })
-  });
-}
 function sendRequestWithFile(formData) {
   return fetch(new Request("/bu", {method: 'POST', credentials:'include'}))
     .then(function(response) { return response.json(); })
@@ -179,6 +132,8 @@ function sendRequestWithFile(formData) {
     })
 }
 function sendRequest(request) {
+  if (!request)
+    return Promise.resolve();
   var formData = new FormData();
   formData.append('pid', request.pid);
   formData.append('lat', request.lat);
@@ -191,33 +146,55 @@ function sendRequest(request) {
   return fetch(new Request('/m',
                            {method: 'POST', body: formData, credentials:'include'}));
 }
-function removeRequest(request) {
-  return caches.open(UPLOAD_INFO_CACHE_NAME)
-    .then(function(info_cache) {
-      return info_cache.delete(request.id);
-    })
-    .then(function() {
-      return caches.open(UPLOAD_DATA_CACHE_NAME);
-    })
-    .then(function(data_cache) {
-      data_cache.delete(request.id);
-    })
-    .then(function() {console.log("ok:" + request.id)},
-          function() {console.log("ng:" + request.id)});
-}
-function sendAndRemoveRequest(request) {
-  var id = request.id;
-  sendRequest(request)
-    .then(function(){
-      return removeRequest(request);
+
+var INDEXED_DB_NAME = 'send_queue';
+var INDEXED_DB_VERSION = 1;
+var STORE_NAME = 'messages';
+
+function openDataBase() {
+  return new Promise(function(resolve, reject) {
+      var req = indexedDB.open(INDEXED_DB_NAME, INDEXED_DB_VERSION);
+      req.onupgradeneeded = function (event) {
+        req.result.createObjectStore(
+            STORE_NAME, { keyPath: 'id' , autoIncrement: true });
+      };
+      req.onsuccess = function (event) { resolve(req.result); }
+      req.onerror = reject;
     });
 }
-function sendRequests(requests) {
-  return Promise.all(requests.map(sendAndRemoveRequest));
+function getMessage(id) {
+  return openDataBase().then(function(db) {
+      return new Promise(function(resolve, reject) {
+        var transaction = db.transaction(STORE_NAME, "readonly");
+        var store = transaction.objectStore(STORE_NAME);
+        var req = store.get(id);
+        req.onsuccess = function() { resolve(req.result); }
+        req.onerror = reject;
+      });
+    });
+}
+function deleteMessage(id) {
+  return openDataBase().then(function(db) {
+      return new Promise(function(resolve, reject) {
+        var transaction = db.transaction(STORE_NAME, "readwrite");
+        var store = transaction.objectStore(STORE_NAME);
+        var req = store.delete(id);
+        req.onsuccess = resolve;
+        req.onerror = reject;
+      });
+    });
+}
+function sendAndDeleteMessage(id) {
+  console.log('sendAndDeleteMessage' + id);
+  return getMessage(id).then(sendRequest).then(function() {
+    return deleteMessage(id);
+  });
 }
 self.addEventListener('sync', function(evt) {
-  if (evt.tag.startsWith('send-msg')) {
-      console.log("sync");
-      evt.waitUntil(getPendingRequests().then(sendRequests));
+  if (evt.tag.startsWith('send-msg:')) {
+    var id = parseInt(evt.tag.substr(9))
+    if (isNaN(id))
+      return;
+    evt.waitUntil(sendAndDeleteMessage(id));
   }
 });

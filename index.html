@@ -1001,40 +1001,37 @@ UIController.prototype = {
       }
   },
   _sendMassageWithSync: function(data) {
-    var UPLOAD_INFO_CACHE_NAME = 'upload_info';
-    var UPLOAD_DATA_CACHE_NAME = 'upload_data';
-    var id = '/' + Math.random();
-    var new_data = {
-      id: id,
-      pid: data.pid,
-      lat: data.lat,
-      lon: data.lon,
-      content: data.content
-    };
-    if (data.file) {
-      new_data.file= {
-        name: data.file.name,
-        size: data.file.size,
-        type: data.file.type,
-        id: id};
-    }
-    return Promise.resolve().then(function() {
-        if (!data.file)
-          return Promise.resolve();
-        return caches.open(UPLOAD_DATA_CACHE_NAME)
-          .then(function(data_cache) {
-              return data_cache.put(new Request(id), new Response(data.file));
+    return new Promise(function(resolve, reject) {
+        var INDEXED_DB_NAME = 'send_queue';
+        var INDEXED_DB_VERSION = 1;
+        var STORE_NAME = 'messages';
+        function openDataBase() {
+          return new Promise(function(resolve, reject) {
+              var req = indexedDB.open(INDEXED_DB_NAME, INDEXED_DB_VERSION);
+              req.onupgradeneeded = function (event) {
+                req.result.createObjectStore(
+                    STORE_NAME, { keyPath: 'id' , autoIncrement: true });
+              };
+              req.onsuccess = function (event) { resolve(req.result); }
+              req.onerror = reject;
             });
-      })
-      .then(function () {
-        return caches.open(UPLOAD_INFO_CACHE_NAME)
-          .then(function(info_cache) {
-              return info_cache.put(new Request(id), new Response(JSON.stringify(new_data)));
+        }
+        function addMessageToDataBase(data) {
+          return openDataBase().then(function(db) {
+              return new Promise(function(resolve, reject) {
+                var transaction = db.transaction(STORE_NAME, "readwrite");
+                var store = transaction.objectStore(STORE_NAME);
+                var req = store.add(data);
+                req.onsuccess = function() { resolve(req.result); }
+                req.onerror = reject;
+              });
             });
-      })
-      .then(function() { return navigator.serviceWorker.ready; })
-      .then(function(reg) {
-        return reg.sync.register('send-msg' + id);
+        }
+        return addMessageToDataBase(data).then(function(result) {
+            return navigator.serviceWorker.ready.then(function(reg) {
+                resolve(reg.sync.register('send-msg:' + result))
+              });
+          });
       });
   },
   _sendMessage: function(data) {
