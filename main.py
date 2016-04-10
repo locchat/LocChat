@@ -573,10 +573,6 @@ class PosUpdateWorkerHandler(webapp2.RequestHandler):
                                cells = geocells)
             user_pos.put()
 
-            key = ndb.Key(UserInfo, long(uid))
-            user_info = key.get()
-            if not user_info:
-                return
             chat_list = get_recent_chat_list_in_box(box)
             now = datetime.datetime.now()
             if user_info.channel_token_available_time > now:
