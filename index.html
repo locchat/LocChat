@@ -757,8 +757,8 @@ UIController.prototype = {
           zIndex : chat.epoch,
         });
         chatDiv = this._createchatDiv(chat);
-        chatDiv.addEventListener('click',this._markerClicked.bind(this, chat.mid), false);
-        google.maps.event.addListener(marker, 'click', this._markerClicked.bind(this, chat.mid));
+        chatDiv.addEventListener('click',this._markerClicked.bind(this, false, chat.mid), false);
+        google.maps.event.addListener(marker, 'click', this._markerClicked.bind(this, true, chat.mid));
         this.markers[chat.mid] = {
           marker: marker,
           chatDiv: chatDiv,
@@ -776,7 +776,7 @@ UIController.prototype = {
     }
     messageDiv.appendChild(fragment);
   },
-  _markerClicked: function(target_mid) {
+  _markerClicked: function(scroll, target_mid) {
     for(var mid in this.markers){
       var markerInfo = this.markers[mid];
       var marker = markerInfo.marker;
@@ -794,10 +794,16 @@ UIController.prototype = {
         marker.setZIndex(markerInfo.epoch);
       }
     }
+    if (scroll) {
+      var visibleChatDiv = document.getElementById(target_mid);
+      if (visibleChatDiv)
+        document.body.scrollTop = visibleChatDiv.offsetTop;
+    }
   },
   _createchatDiv: function(chat) {
     var chatDiv = document.createElement('div');
     chatDiv.className = 'chat';
+    chatDiv.id = chat.mid;
     var contentDiv = document.createElement('div');
     contentDiv.className = 'chat-content';
     contentDiv.appendChild(document.createTextNode(chat['content']));
