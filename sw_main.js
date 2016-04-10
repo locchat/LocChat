@@ -62,7 +62,8 @@ self.addEventListener('activate', function(evt) {
 self.addEventListener('fetch', function(evt) {
   if (STATIC_FILE_HASH[evt.request.url]) {
     evt.respondWith(
-      caches.match(evt.request, {cacheName: STATIC_CACHE_NAME}));
+      caches.match(evt.request, {cacheName: STATIC_CACHE_NAME})
+        .catch(function() { return fetch(evt.request); }));
     return;
   }
   if (evt.request.url.startsWith(location.protocol + '//csi.gstatic.com')) {
