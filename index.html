@@ -679,6 +679,7 @@ UIController.prototype = {
         new google.maps.Size(17,17),
         new google.maps.Point(0,0),
         new google.maps.Point(8,8));
+    this._scrollingInfo = undefined;
     if (this.chatList.length)
       this._updateChatListView();
   },
@@ -797,8 +798,32 @@ UIController.prototype = {
     if (scroll) {
       var visibleChatDiv = document.getElementById(target_mid);
       if (visibleChatDiv)
-        document.body.scrollTop = visibleChatDiv.offsetTop;
+        this._smoothScroll(visibleChatDiv.offsetTop);
     }
+  },
+  _smoothScroll: function(scrollTop) {
+    this._scrollingInfo = undefined;
+    if (document.body.scrollTop == scrollTop)
+      return;
+    this._scrollingInfo = {
+      start: document.body.scrollTop,
+      end: scrollTop,
+      previous: document.body.scrollTop,
+      count: 0
+    };
+    function scrollNext() {
+      var SCROLL_MAX = 10;
+      var info = this._scrollingInfo;
+      if (!info || info.previous != document.body.scrollTop ||
+          info.count++ == SCROLL_MAX) {
+        return;
+      }
+      document.body.scrollTop =
+        (info.start * (SCROLL_MAX - info.count) + info.end * info.count) / SCROLL_MAX;
+      info.previous = document.body.scrollTop;
+        setTimeout(scrollNext.bind(this), 20);
+    }
+    setTimeout(scrollNext.bind(this), 20);
   },
   _createchatDiv: function(chat) {
     var chatDiv = document.createElement('div');
