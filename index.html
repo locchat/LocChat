@@ -402,8 +402,14 @@ PageSessionController.prototype = {
     debug('Socket opened');
     this.retryCount = 0;
   },
+  _sendAck: function() {
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', '/a');
+    xhr.send();
+  },
   _onSocketMessage: function(socket, e) {
     try{
+      this._sendAck();
       var data = JSON.parse(e.data);
       if (data['pid'] && data['pid'] != this.pid) {
         this._onSessionExpire();

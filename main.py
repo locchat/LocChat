@@ -337,6 +337,12 @@ class MainPage(BaseHandler):
         template = JINJA_ENVIRONMENT.get_template('index.html')
         self.response.write(template.render(template_values))
 
+class AckHandler(BaseHandler):
+    def post(self):
+        if not referer_check(self.request):
+            return
+        uid = self.session.get('uid')
+        memcache.delete('WTIME' + str(uid))
 
 class HandShakeHandler(BaseHandler):
     def post(self):
@@ -676,61 +682,102 @@ class PostMessageWorkerHandler(webapp2.RequestHandler):
         json_message = json.dumps({
             'chat': message_data.to_chat_dict()})
         gcm_recipients = []
+        gcm_retry_recipients = []
         channel_send_count = 0
+        timestamp = datetime.datetime.now().isoformat()
         while user_info_get_futures:
             future = ndb.Future.wait_any(user_info_get_futures)
             user_info_get_futures.remove(future)
             user_info = future.get_result()
+            send_via_channel = False
+            gcm_subscription_id = None
+            uid = user_info.key.id()
+
             if user_info.channel_token_available_time > now:
+                send_via_channel = True
+            if user_info.notification_endpoint:
+                gcm_subscription_id = get_gcm_subscription_id(user_info.notification_endpoint)
+
+            if gcm_subscription_id is not None:
+                if not user_info.focused:
+                    gcm_recipients.append({'uid':uid, 'gcm_subscription_id':gcm_subscription_id})
+                elif send_via_channel:
+                    logging.info('gcm_retry_recipients.append')
+                    memcache.set('WTIME' + str(user_info.key.id()), timestamp)
+                    gcm_retry_recipients.append({'uid':uid, 'gcm_subscription_id':gcm_subscription_id})
+
+            if send_via_channel:
                 channel.send_message(user_info.channel_id, json_message)
                 channel_send_count += 1
-            if user_info.notification_endpoint and not user_info.focused:
-                gcm_subscription_id = get_gcm_subscription_id(user_info.notification_endpoint)
-                if gcm_subscription_id:
-                    gcm_recipients.append({'uid':user_info.key.id(), 'gcm_subscription_id':gcm_subscription_id})
+
         logging.info('Channel API count: %d' % channel_send_count)
-        self.sendToGCM(gcm_recipients)
+        sendToGCM(gcm_recipients)
         result = rpc.get_result()
         self.response.write('ok')
-
-    def sendToGCM(self, gcm_recipients):
-        if (len(gcm_recipients) == 0):
+        if (len(gcm_retry_recipients) == 0):
             return
-        logging.info('Sending to GCM. count: %d' % len(gcm_recipients))
-        registration_ids = []
-        for recipient in gcm_recipients:
-            logging.info("GCM uid:%s gcm_id:%s" % (recipient.get('uid'), recipient.get('gcm_subscription_id')))
-            registration_ids.append(recipient.get('gcm_subscription_id'))
+        taskqueue.add(url='/m_retry_worker', params={
+            'mid': mid,
+            'recipients': json.dumps(gcm_retry_recipients),
+            'timestamp': timestamp
+        }, countdown = 2)
 
-        post_data = json.dumps({
-            'registration_ids': registration_ids,
-            'collapse_key': str(type),
-        })
-        result = urlfetch.fetch(url=GCM_ENDPOINT,
-                                payload=post_data,
-                                method=urlfetch.POST,
-                                headers={
-                                    'Content-Type': 'application/json',
-                                    'Authorization': 'key=' + GCM_KEY,
-                                },
-                                validate_certificate=True,
-                                allow_truncated=True)
-        if result.status_code != 200:
-            logging.error("GCM send failed %d:\n%s" % (result.status_code,
-                                                       result.content))
+class PostMessageRetryWorkerHandler(webapp2.RequestHandler):
+    def post(self):
+        queuename = self.request.headers.get('X-AppEngine-QueueName')
+        if queuename == None:
+            logging.info('no quene name')
             return
-        try:
-            logging.info("GCM result:\n%s" % (result.content))
-            result_json = json.loads(result.content)
-        except:
-            logging.exception("Failed to decode GCM JSON response")
-            return stats
+        mid = self.request.get('mid')
+        recipients = json.loads(self.request.get('recipients'))
+        timestamp = self.request.get('timestamp')
+        gcm_recipients = []
+        logging.info('PostMessageRetryWorkerHandler ' + mid)
+        logging.info(recipients)
+        for recipient in recipients:
+            mem_timestamp = memcache.get('WTIME' + str(recipient['uid']))
+            if mem_timestamp and mem_timestamp == timestamp:
+                gcm_recipients.append({'uid':recipient['uid'], 'gcm_subscription_id':recipient['gcm_subscription_id']})
+        sendToGCM(gcm_recipients)
 
-        for i, res in enumerate(result_json['results']):
-            if 'error' in res and res['error'] in PERMANENT_GCM_ERRORS:
-                uid = gcm_recipients[i].get('uid')
-                ndb.transaction(lambda: unscribe_transaction(uid))
+def sendToGCM(gcm_recipients):
+    if (len(gcm_recipients) == 0):
         return
+    logging.info('Sending to GCM. count: %d' % len(gcm_recipients))
+    registration_ids = []
+    for recipient in gcm_recipients:
+        logging.info("GCM uid:%s gcm_id:%s" % (recipient.get('uid'), recipient.get('gcm_subscription_id')))
+        registration_ids.append(recipient.get('gcm_subscription_id'))
+
+    post_data = json.dumps({
+        'registration_ids': registration_ids,
+        'collapse_key': str(type),
+    })
+    result = urlfetch.fetch(url=GCM_ENDPOINT,
+                            payload=post_data,
+                            method=urlfetch.POST,
+                            headers={
+                                'Content-Type': 'application/json',
+                                'Authorization': 'key=' + GCM_KEY,
+                            },
+                            validate_certificate=True,
+                            allow_truncated=True)
+    if result.status_code != 200:
+        logging.error("GCM send failed %d:\n%s" % (result.status_code,
+                                                   result.content))
+        return
+    try:
+        logging.info("GCM result:\n%s" % (result.content))
+        result_json = json.loads(result.content)
+    except:
+        logging.exception("Failed to decode GCM JSON response")
+        return stats
+
+    for i, res in enumerate(result_json['results']):
+        if 'error' in res and res['error'] in PERMANENT_GCM_ERRORS:
+            uid = gcm_recipients[i].get('uid')
+            ndb.transaction(lambda: unscribe_transaction(uid))
+    return
 
 class ListMessageHandler(BaseHandler):
     def get(self):
@@ -952,16 +999,18 @@ class ServiceWorkerScriptHandler(BaseHandler):
         self.response.headers['Content-Type'] = 'application/javascript'
         self.response.headers['Pragma'] = 'no-cache'
         self.response.headers['Cache-Control'] = 'no-cache'
-        self.response.write('importScripts(\'sw_main.js?3\');')
+        self.response.write('importScripts(\'sw_main.js?4\');')
 
 
 app = webapp2.WSGIApplication([
     ('/', MainPage),
+    ('/a', AckHandler),
     ('/h', HandShakeHandler),
     ('/p', PosUpdateHandler),
     ('/p_worker', PosUpdateWorkerHandler),
     ('/m', PostMessageHandler),
     ('/m_worker', PostMessageWorkerHandler),
+    ('/m_retry_worker', PostMessageRetryWorkerHandler),
     ('/l', ListMessageHandler),
     ('/subscribe', SubscribeHandler),
     ('/unsubscribe', UnsubscribeHandler),
