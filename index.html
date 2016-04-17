@@ -999,7 +999,7 @@ UIController.prototype = {
       this.cameraPic.classList.add('camera-pic-hidden');
       if (navigator.serviceWorker && window.SyncManager) {
         this._sendMassageWithSync(data)
-          .catch((function(){
+          .catch((function() {
             this._sendMessage(data);
           }).bind(this));
       } else {
