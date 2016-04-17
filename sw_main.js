@@ -185,7 +185,6 @@ function deleteMessage(id) {
     });
 }
 function sendAndDeleteMessage(id) {
-  console.log('sendAndDeleteMessage' + id);
   return getMessage(id).then(sendRequest).then(function() {
     return deleteMessage(id);
   });
