@@ -999,7 +999,7 @@ class ServiceWorkerScriptHandler(BaseHandler):
         self.response.headers['Content-Type'] = 'application/javascript'
         self.response.headers['Pragma'] = 'no-cache'
         self.response.headers['Cache-Control'] = 'no-cache'
-        self.response.write('importScripts(\'sw_main.js?5\');')
+        self.response.write('importScripts(\'sw_main.js?6\');')
 
 
 app = webapp2.WSGIApplication([

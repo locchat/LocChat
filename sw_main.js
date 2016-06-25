@@ -67,7 +67,7 @@ self.addEventListener('fetch', function(evt) {
     return;
   }
   if (evt.request.url.startsWith(location.protocol + '//csi.gstatic.com')) {
-    evt.respondWith(new Response(""));
+    evt.respondWith(new Response(''));
     return;
   }
 });
@@ -124,7 +124,7 @@ self.addEventListener('notificationclick', function(evt) {
 
 
 function sendRequestWithFile(formData) {
-  return fetch(new Request("/bu", {method: 'POST', credentials:'include'}))
+  return fetch(new Request('/bu', {method: 'POST', credentials:'include'}))
     .then(function(response) { return response.json(); })
     .then(function(json) {
       return fetch(new Request(json['url'],
@@ -165,7 +165,7 @@ function openDataBase() {
 function getMessage(id) {
   return openDataBase().then(function(db) {
       return new Promise(function(resolve, reject) {
-        var transaction = db.transaction(STORE_NAME, "readonly");
+        var transaction = db.transaction(STORE_NAME, 'readonly');
         var store = transaction.objectStore(STORE_NAME);
         var req = store.get(id);
         req.onsuccess = function() { resolve(req.result); }
@@ -176,7 +176,7 @@ function getMessage(id) {
 function deleteMessage(id) {
   return openDataBase().then(function(db) {
       return new Promise(function(resolve, reject) {
-        var transaction = db.transaction(STORE_NAME, "readwrite");
+        var transaction = db.transaction(STORE_NAME, 'readwrite');
         var store = transaction.objectStore(STORE_NAME);
         var req = store.delete(id);
         req.onsuccess = resolve;

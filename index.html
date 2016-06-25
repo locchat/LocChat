@@ -1024,7 +1024,7 @@ UIController.prototype = {
     function addMessageToDataBase(data) {
       return openDataBase().then(function(db) {
           return new Promise(function(resolve, reject) {
-            var transaction = db.transaction(STORE_NAME, "readwrite");
+            var transaction = db.transaction(STORE_NAME, 'readwrite');
             var store = transaction.objectStore(STORE_NAME);
             var req = store.add(data);
             req.onsuccess = function() { resolve(req.result); }
