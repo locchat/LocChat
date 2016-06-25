@@ -304,6 +304,7 @@ class MessageData(object):
 class MainPage(BaseHandler):
     def get(self):
         if not IsDevAppserver():
+            self.response.headers['Strict-Transport-Security'] = 'max-age=7776000'
             if self.request.url == 'https://www.locchat.com/' or self.request.url[0:8] == 'http://www.locchat.com/':
                 self.redirect('https://locchat.com/')
                 return
@@ -999,7 +1000,7 @@ class ServiceWorkerScriptHandler(BaseHandler):
         self.response.headers['Content-Type'] = 'application/javascript'
         self.response.headers['Pragma'] = 'no-cache'
         self.response.headers['Cache-Control'] = 'no-cache'
-        self.response.write('importScripts(\'sw_main.js?6\');')
+        self.response.write('importScripts(\'sw_main.js?7\');')
 
 
 app = webapp2.WSGIApplication([
