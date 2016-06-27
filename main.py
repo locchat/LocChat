@@ -196,6 +196,14 @@ class ChatMessagePos(ndb.Model):
     def _get_kind(cls):
         return 'C'
 
+class LastPostTaskInfo(ndb.Model):
+    _use_datastore = False
+    task_name = ndb.StringProperty('n', indexed=False)
+    timestamp = ndb.StringProperty('s', indexed=False)
+    @classmethod
+    def _get_kind(cls):
+        return 'LPT'
+
 class MessageData(object):
     def __init__(self, mid):
         self._sep_pos = mid[EPOCH_STRING_LENGTH + GEOCELL_RESOLUTION:].find(':')
@@ -485,7 +493,25 @@ def get_recent_chat_list_in_box(box):
         logging.info(result)
     return chat_list
 
+@ndb.tasklet
+def add_pos_worker_task(queue, uid, new_task_name, timestamp, params):
+    # task_info = yield ndb.Key(LastPostTaskInfo, long(uid)).get_async()
+    # if task_info:
+    #     logging.info("task_info-------------------------");
+    #     logging.info(task_info.task_name);
+    #     logging.info(task_info.timestamp);
+    #     logging.info('delete last_task_name ' + task_info.task_name)
+    #     yield queue.delete_tasks_by_name_async(str(task_info.task_name))
+    new_task_info = LastPostTaskInfo(id = long(uid), task_name = new_task_name, timestamp = timestamp)
+    logging.info("new_task_info-------------------------");
+    logging.info(new_task_info.task_name);
+    logging.info(new_task_info.timestamp);
+    yield new_task_info.put_async()
+    result = yield queue.add_async(taskqueue.Task(url='/p_worker', name = new_task_name, params = params, countdown = 1))
+    raise ndb.Return(result)
+
 class PosUpdateHandler(BaseHandler):
+    @ndb.toplevel
     def get(self):
         if not referer_check(self.request):
             return
@@ -508,17 +534,9 @@ class PosUpdateHandler(BaseHandler):
 
             default_queue = taskqueue.Queue('default')
             timestamp = now.isoformat();
-            last_task_name = memcache.get('LASTPTASK' + str(uid))
-            if last_task_name:
-                logging.info('delete last_task_name ' + last_task_name)
-                delete_task_rpc = default_queue.delete_tasks_by_name_async(last_task_name)
-
-            memcache.set('PTIME' + str(uid), timestamp)
             new_task_name = str(uuid.uuid4());
-            memcache.set('LASTPTASK' + str(uid), new_task_name)
             logging.info('new_task_name ' + new_task_name)
-
-            rpc = default_queue.add_async(taskqueue.Task(url='/p_worker', name = new_task_name, params={
+            add_pos_worker_task(default_queue, uid, new_task_name, timestamp, params={
                 'task_name': new_task_name,
                 'timestamp': timestamp,
                 'uid': uid,
@@ -526,13 +544,10 @@ class PosUpdateHandler(BaseHandler):
                 's': box.south,
                 'w': box.west,
                 'n': box.north,
-                'e': box.east,
-            }, countdown = 1))
+                'e': box.east})
+
             chat_list = get_recent_chat_list_in_box(box)
             self.response.write(json.dumps({'chat_list': chat_list}))
-            if last_task_name:
-                result = delete_task_rpc.get_result()
-            rpc.get_result()
             return
         except ValueError:
             self.response.write('error')
@@ -554,8 +569,15 @@ class PosUpdateWorkerHandler(webapp2.RequestHandler):
             logging.info('PosUpdateWorkerHandler task_name' + self.request.get('task_name'))
             uid = self.request.get('uid')
             ptime = memcache.get('PTIME' + uid)
+            task_info = ndb.Key(LastPostTaskInfo, long(uid)).get()
+            if task_info:
+                logging.info("task_info");
+                logging.info(task_info.task_name);
+                logging.info(task_info.timestamp);
+
             timestamp = self.request.get('timestamp')
-            if ptime and ptime != timestamp:
+            if task_info and task_info.timestamp != timestamp:
+                logging.info("timestamp missmatch");
                 return
             pid = self.request.get('pid')
             s = float(self.request.get('s'))
@@ -1004,7 +1026,7 @@ class ServiceWorkerScriptHandler(BaseHandler):
         self.response.write('importScripts(\'sw_main.js?7\');')
 
 
-app = webapp2.WSGIApplication([
+app = ndb.toplevel(webapp2.WSGIApplication([
     ('/', MainPage),
     ('/a', AckHandler),
     ('/h', HandShakeHandler),
@@ -1022,4 +1044,4 @@ app = webapp2.WSGIApplication([
     ('/bu', BlobUrlHandler),
     ('/cm', CameraMessageHandler),
     ('/sw.js', ServiceWorkerScriptHandler),
-], debug = True, config = WEBAPP2_CONFIG)
+], debug = True, config = WEBAPP2_CONFIG))
