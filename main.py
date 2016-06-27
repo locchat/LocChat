@@ -304,13 +304,14 @@ class MessageData(object):
 class MainPage(BaseHandler):
     def get(self):
         if not IsDevAppserver():
-            self.response.headers['Strict-Transport-Security'] = 'max-age=7776000'
             if self.request.url == 'https://www.locchat.com/' or self.request.url[0:8] == 'http://www.locchat.com/':
                 self.redirect('https://locchat.com/')
                 return
             if self.request.url[0:8] != 'https://':
                 self.redirect('https://' + self.request.url[7:])
                 return
+            else:
+                self.response.headers['Strict-Transport-Security'] = 'max-age=108864000; includeSubDomains; preload'
         logging.info('MainPage')
         lat = self.session.get('lat')
         lon = self.session.get('lon')
