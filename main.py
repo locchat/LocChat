@@ -204,6 +204,13 @@ class LastPostTaskInfo(ndb.Model):
     def _get_kind(cls):
         return 'LPT'
 
+class MessageListCache(ndb.Model):
+    _use_datastore = False
+    messages = ndb.StringProperty('m', repeated=True, indexed=False)
+    @classmethod
+    def _get_kind(cls):
+        return 'MLC'
+
 class MessageData(object):
     def __init__(self, mid):
         self._sep_pos = mid[EPOCH_STRING_LENGTH + GEOCELL_RESOLUTION:].find(':')
@@ -424,74 +431,77 @@ def login_transaction(uid, pid, renew_channel):
     user_info.put()
     return user_info, kick_channel
 
-def get_recent_chat_list_in_box(box):
-    query_geocells = geo.geocell.best_bbox_search_cells(box, cost_function)
-    memcache_results = memcache.get_multi(['MP' + cell for cell in query_geocells])
-    messages = {}
-    for mp_cell, mid_list in memcache_results.items():
-        for mid in mid_list:
-            message = MessageData(mid)
-            if message.is_inside(box):
-                messages[mid] = message
 
-    futures = []
-    for cell in query_geocells:
-        if 'MP' + cell in memcache_results:
-            futures.append(None)
-            continue
+@ndb.tasklet
+def get_recent_chat_list_in_box_from_cache_and_query(box, only_mem):
+    cells = geo.geocell.best_bbox_search_cells(box, cost_function)
+    logging.info('get_recent_chat_list_in_box_from_cache_and_query')
+
+    @ndb.tasklet
+    def callback(cell):
+        logging.info("MessageListCache check--" + cell);
+        result = yield ndb.Key(MessageListCache, cell).get_async()
+        messages = {}
+        if result:
+            for mid in result.messages:
+                mid = str(mid.encode('utf-8'))
+                message = MessageData(mid)
+                if message.is_inside(box):
+                    messages[mid] = message
+                    if not message.uid is None:
+                        ndb.Key(UserInfo, message.uid).get_async()
+                    if not message.iid is None:
+                        ndb.Key(ImageInfo, message.iid).get_async()
+            logging.info("MessageListCache hit--" + cell);
+            raise ndb.Return(messages)
+        if only_mem:
+            raise ndb.Return(messages)
+        logging.info("ChatMessagePos.query--" + cell);
         query = ChatMessagePos.query(ChatMessagePos.cells == cell).order(-ChatMessagePos.key)
-        future = query.fetch_async(MESSAGE_LIST_MAX_COUNT * 2, keys_only=True)
-        futures.append(future)
-
-    mem_put_set = {}
-    for i, future in enumerate(futures):
-        if future == None:
-            continue
-        result = future.get_result();
-        mid_for_mem_list = []
+        result = yield query.fetch_async(MESSAGE_LIST_MAX_COUNT * 2, keys_only=True)
+        logging.info("ChatMessagePos.query--" + cell + "done");
+        mid_list = []
         for key in result:
             mid = key.id()
-            mid_for_mem_list.append(mid)
+            mid_list.append(mid)
             message = MessageData(mid)
-            # messages[mid] = message
             if message.is_inside(box):
                 messages[mid] = message
-        mem_put_set['MP' + query_geocells[i]] = mid_for_mem_list
-
-    if len(mem_put_set):
-        client = memcache.Client()
-        rpc = client.set_multi_async(mem_put_set)
-    top_messages = sorted(set(messages.keys()), reverse=True)[0:MESSAGE_LIST_MAX_COUNT]
+                if not message.uid is None:
+                    ndb.Key(UserInfo, message.uid).get_async()
+                if not message.iid is None:
+                    ndb.Key(ImageInfo, message.iid).get_async()
+        @ndb.tasklet
+        def store_to_cache(cell, mid_list):
+            logging.info("store_to_cache--" + cell + "-----------------------");
+            yield MessageListCache(id = cell, messages = mid_list).put_async()
+            logging.info("store_to_cache--" + cell + "---done");
+        logging.info("store_to_cache--");
+        store_to_cache(cell, mid_list)
+        logging.info("store_to_cache--done");
+        raise ndb.Return(messages)
+    outputs = map(callback, cells)
+    all_messages = {}
+    logging.info("all_messages--");
+    for output in outputs:
+        all_messages.update(output.get_result())
+    logging.info("all_messages--done");
+    top_messages = sorted(set(all_messages.keys()), reverse=True)[0:MESSAGE_LIST_MAX_COUNT]
     chat_list = []
-
-    user_info_futures = {}
     for message_key in top_messages:
-        uid = messages[message_key].uid
-        if uid in user_info_futures:
-            continue
-        key = ndb.Key(UserInfo, uid)
-        user_info_futures[uid] = key.get_async()
-
-    image_info_futures = {}
-    for message_key in top_messages:
-        iid = messages[message_key].iid
-        if iid is None or iid in image_info_futures:
-            continue
-        key = ndb.Key(ImageInfo, iid)
-        image_info_futures[iid] = key.get_async()
-
-    user_info_map = {}
-    for message_key in top_messages:
-        message = messages[message_key]
+        message = all_messages[message_key]
         if message.user_info is None:
-            message.user_info = user_info_futures[message.uid].get_result()
+            message.user_info = ndb.Key(UserInfo, message.uid).get()
         if (not message.iid is None) and (message.image_info is None):
-            message.image_info = image_info_futures[message.iid].get_result()
+            message.image_info = ndb.Key(ImageInfo, message.iid).get()
         chat_list.append(message.to_chat_dict())
-    if len(mem_put_set):
-        result = rpc.get_result()
-        logging.info(result)
     return chat_list
+
+def get_recent_chat_list_in_box(box):
+    return get_recent_chat_list_in_box_from_cache_and_query(box, False).get_result()
+
+def get_recent_chat_list_in_box_quick(box):
+    return get_recent_chat_list_in_box_from_cache_and_query(box, True).get_result()
 
 @ndb.tasklet
 def add_pos_worker_task(queue, uid, new_task_name, timestamp, params):
@@ -546,7 +556,7 @@ class PosUpdateHandler(BaseHandler):
                 'n': box.north,
                 'e': box.east})
 
-            chat_list = get_recent_chat_list_in_box(box)
+            chat_list = get_recent_chat_list_in_box_quick(box)
             self.response.write(json.dumps({'chat_list': chat_list}))
             return
         except ValueError:
@@ -593,8 +603,11 @@ class PosUpdateWorkerHandler(webapp2.RequestHandler):
                 logging.info('pid not match [' + user_info.pid + '][' + str(pid) + ']')
                 return
             box = geo.geotypes.Box(n, e, s, w)
+            logging.info('best_bbox_search_cells')
             geocells = geo.geocell.best_bbox_search_cells(box, cost_function)
+            logging.info('best_bbox_search_cells done')
             memcache.delete_multi(['UP' + cell for cell in geocells], seconds = 1)
+            logging.info('memcache.delete_multi done')
             user_pos = UserPos(id = long(uid),
                                north = n,
                                east = e,
@@ -602,6 +615,7 @@ class PosUpdateWorkerHandler(webapp2.RequestHandler):
                                west = w,
                                cells = geocells)
             user_pos.put()
+            logging.info('user_pos.put() done')
 
             chat_list = get_recent_chat_list_in_box(box)
             now = datetime.datetime.now()
@@ -647,7 +661,15 @@ class PostMessageHandler(BaseHandler):
         logging.info('PostMessageHandler mid:' + mid)
 
         cells = [cell[:res] for res in range(1, GEOCELL_RESOLUTION + 1)]
-        memcache.delete_multi(['MP' + cell for cell in cells], seconds = 1)
+
+
+        @ndb.tasklet
+        def delete_message_list_cache(cell):
+            yield ndb.Key(MessageListCache, cell).delete_async()
+
+        for cell in cells:
+            delete_message_list_cache(cell)
+
         chat_message_pos = ChatMessagePos(id = mid, cells = cells)
         chat_message_pos.put()
         taskqueue.add(url='/m_worker', params={
