@@ -572,6 +572,8 @@ MapController.prototype = {
       overviewMapControl: false,
       maxZoom: 15,
       minZoom: 2,
+      gestureHandling: 'greedy',
+      fullscreenControl: false
     };
     this._map = new google.maps.Map(
         document.getElementById('map-canvas'),
