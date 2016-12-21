@@ -79,6 +79,8 @@ GCM_KEY = SECRET_KEYS['gcm_key'].encode()
 GCM_ENDPOINT = 'https://android.googleapis.com/gcm/send'
 GCM_ENDPOINT_LENGTH = len(GCM_ENDPOINT)
 
+MAP_KEY = SECRET_KEYS['map_key'].encode()
+
 def get_gcm_subscription_id(endpoint):
     if not endpoint.startswith(GCM_ENDPOINT):
         return None
@@ -355,6 +357,7 @@ class MainPage(BaseHandler):
             'lat': lat,
             'lon': lon,
             'zoom': zoom,
+            'map_key': MAP_KEY,
         }
         template = JINJA_ENVIRONMENT.get_template('index.html')
         self.response.write(template.render(template_values))
