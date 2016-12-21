@@ -1045,7 +1045,7 @@ class ServiceWorkerScriptHandler(BaseHandler):
         self.response.headers['Content-Type'] = 'application/javascript'
         self.response.headers['Pragma'] = 'no-cache'
         self.response.headers['Cache-Control'] = 'no-cache'
-        self.response.write('importScripts(\'sw_main.js?7\');')
+        self.response.write('importScripts(\'sw_main.js?8\');')
 
 
 app = ndb.toplevel(webapp2.WSGIApplication([
