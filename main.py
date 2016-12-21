@@ -17,6 +17,7 @@ from google.appengine.api import urlfetch
 from google.appengine.api import users
 from google.appengine.api import channel
 from google.appengine.api import memcache
+from google.appengine.api import modules
 from google.appengine.api import taskqueue
 from google.appengine.ext import ndb
 from google.appengine.ext.webapp import blobstore_handlers
@@ -1042,6 +1043,13 @@ class CameraMessageHandler(BaseBlobHandler):
 
 class ServiceWorkerScriptHandler(BaseHandler):
     def get(self):
+        version = modules.get_current_version_name()
+        module = modules.get_current_module_name()
+        instance_id = modules.get_current_instance_id()
+        logging.info('version ' + str(version))
+        logging.info('module ' + str(module))
+        logging.info('instance_id ' + str(instance_id))
+
         self.response.headers['Content-Type'] = 'application/javascript'
         self.response.headers['Pragma'] = 'no-cache'
         self.response.headers['Cache-Control'] = 'no-cache'
