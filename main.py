@@ -47,6 +47,10 @@ MESSAGE_FORMAT_VERSION = '0'
 MESSAGE_LIST_MAX_COUNT = 100
 PERMANENT_GCM_ERRORS = {'InvalidRegistration', 'NotRegistered',
                         'InvalidPackageName', 'MismatchSenderId'}
+VERSION = modules.get_current_version_name()
+if modules.get_current_version_name() is None:
+  VERSION = modules.get_current_instance_id()
+
 
 def IsDevAppserver():
   return os.environ['SERVER_SOFTWARE'].startswith('Development/')
@@ -1043,17 +1047,10 @@ class CameraMessageHandler(BaseBlobHandler):
 
 class ServiceWorkerScriptHandler(BaseHandler):
     def get(self):
-        version = modules.get_current_version_name()
-        module = modules.get_current_module_name()
-        instance_id = modules.get_current_instance_id()
-        logging.info('version ' + str(version))
-        logging.info('module ' + str(module))
-        logging.info('instance_id ' + str(instance_id))
-
         self.response.headers['Content-Type'] = 'application/javascript'
         self.response.headers['Pragma'] = 'no-cache'
         self.response.headers['Cache-Control'] = 'no-cache'
-        self.response.write('importScripts(\'sw_main.js?8\');')
+        self.response.write('importScripts(\'sw_main.js?' + VERSION + '\');')
 
 
 app = ndb.toplevel(webapp2.WSGIApplication([
